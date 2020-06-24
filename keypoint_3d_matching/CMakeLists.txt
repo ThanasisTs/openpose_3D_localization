@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   keypoint_3d_matching_msgs
 )
 find_package(/usr/local/lib/OpenPose/OpenPose REQUIRED)
-
+find_package(Boost REQUIRED)
 catkin_package(
    INCLUDE_DIRS include
    CATKIN_DEPENDS roscpp sensor_msgs std_msgs pcl_ros message_filters openpose_ros_msgs   keypoint_3d_matching_msgs

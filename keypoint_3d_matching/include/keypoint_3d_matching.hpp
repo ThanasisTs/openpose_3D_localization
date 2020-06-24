@@ -11,7 +11,8 @@
 
 /* ROS headers */
 #include <ros/ros.h>
-
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
 /* TF headers */
 #include <tf/transform_listener.h>
 
@@ -25,6 +26,7 @@
 #include <cmath>
 #include <vector>
 #include <string>
+#include <boost/bind.hpp>
 
 /* C headers */
 #include <assert.h>   // for development phase
