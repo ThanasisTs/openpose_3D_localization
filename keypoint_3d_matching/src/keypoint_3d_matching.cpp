@@ -1,14 +1,6 @@
 #include "keypoint_3d_matching.hpp"
 
-
-ros::Time timeStamp;
-
-class Human3D;
-
-class HelpPointer{
-public:
-    void (Human3D::*memberFunctionPointer)();
-};
+// #define print(x) std::cout << x << std::endl;
 
 class Human3D{
 private:
@@ -17,120 +9,125 @@ private:
     int neighborhoodFactor;
 public:
     Human3D(std::vector<std::vector<int> > int_vv, keypoint_3d_matching_msgs::Keypoint3d_list int_vv1n, int f);
-    // void pointCloudTopicCallback(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& pcl_msgs);
-    // void humanListCallback(const openpose_ros_msgs::OpenPoseHumanList::ConstPtr& list_msg);
-    HelpPointer help_pointer;
-    void callback(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& pcl_msgs, const openpose_ros_msgs::OpenPoseHumanList::ConstPtr& list_msg);
+    void pointCloudTopicCallback(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& pcl_msgs);
+    void humanListCallback(const openpose_ros_msgs::OpenPoseHumanList::ConstPtr& list_msg);
 };
+
+void check_pointcloud (const sensor_msgs::PointCloud2::ConstPtr pcl){
+    std::cout << pcl->header.stamp << std::endl;
+}
 
 Human3D::Human3D(std::vector<std::vector<int> > int_vv, keypoint_3d_matching_msgs::Keypoint3d_list int_vv1, int f)
 :neighborhoodOffset(int_vv), keypoints_v(int_vv1), neighborhoodFactor(f){
 }
 
-
-void Human3D::callback (const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& pcl_msg, const openpose_ros_msgs::OpenPoseHumanList::ConstPtr& list_msg){
+void Human3D::pointCloudTopicCallback(const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& pcl_msg){
+    pclMsg = true;
     pPCL = pcl_msg;
+    std::cout << ros::Time(pPCL->header.stamp) << std::endl;
+}
 
-    if (list_msg->num_humans == 0){
-        ROS_INFO("No human detected in current frame.");
-        return;
-    }
-
-    for (short int i=0; i<points_of_interest.size(); i++){
-        double x=0.0, y=0.0, z=0.0, x_pix, y_pix;
-        if (points_of_interest[i]<26){
-            x_pix = list_msg->human_list[0].body_key_points_with_prob[points_of_interest[i]].x;
-            y_pix = list_msg->human_list[0].body_key_points_with_prob[points_of_interest[i]].y;
-        }
-        else if (points_of_interest[i]<46){
-            x_pix = list_msg->human_list[0].left_hand_key_points_with_prob[points_of_interest[i]-26].x;
-            y_pix = list_msg->human_list[0].left_hand_key_points_with_prob[points_of_interest[i]-26].y;
-        }
-        else{
-            x_pix = list_msg->human_list[0].right_hand_key_points_with_prob[points_of_interest[i]-46].x;
-            y_pix = list_msg->human_list[0].right_hand_key_points_with_prob[points_of_interest[i]-46].y;
-        }
-        
-        timeStamp = ros::Time::now();
-        if (std::isnan(x_pix) || std::isnan(y_pix)){
-            keypoints_v.keypoints[i].points.point.x = 0;
-            keypoints_v.keypoints[i].points.point.y = 0;
-            keypoints_v.keypoints[i].points.point.z = 0;
-            keypoints_v.keypoints[i].points.header.stamp = timeStamp;
-            continue;
+void Human3D::humanListCallback(const openpose_ros_msgs::OpenPoseHumanList::ConstPtr& list_msg){
+    if (pclMsg){
+        std::cout << list_msg->image_header.stamp << std::endl;
+        if (list_msg->num_humans == 0){
+            ROS_INFO("No human detected in current frame.");
+            return;
         }
 
-        if (!std::isnan(x_pix) && !std::isnan(y_pix) && x_pix && y_pix){
-
-            pcl::PointXYZRGBA p = pPCL->at(x_pix, y_pix);
-            double x0 = p.x;
-            int divisors = 0;
-
-            if (std::isnan(p.x) || std::isnan(p.y) || std::isnan(p.z) || !p.x || !p.y || !p.z){
+        for (short int i=0; i<points_of_interest.size(); i++){
+            double x=0.0, y=0.0, z=0.0, x_pix, y_pix;
+            if (points_of_interest[i]<26){
+                x_pix = list_msg->human_list[0].body_key_points_with_prob[points_of_interest[i]].x;
+                y_pix = list_msg->human_list[0].body_key_points_with_prob[points_of_interest[i]].y;
+            }
+            else if (points_of_interest[i]<46){
+                x_pix = list_msg->human_list[0].left_hand_key_points_with_prob[points_of_interest[i]-25].x;
+                y_pix = list_msg->human_list[0].left_hand_key_points_with_prob[points_of_interest[i]-25].y;
+            }
+            else{
+                x_pix = list_msg->human_list[0].right_hand_key_points_with_prob[points_of_interest[i]-45].x;
+                y_pix = list_msg->human_list[0].right_hand_key_points_with_prob[points_of_interest[i]-45].y;
+            }
+            
+            if (std::isnan(x_pix) || std::isnan(y_pix)){
                 keypoints_v.keypoints[i].points.point.x = 0;
                 keypoints_v.keypoints[i].points.point.y = 0;
                 keypoints_v.keypoints[i].points.point.z = 0;
-                keypoints_v.keypoints[i].points.header.stamp = timeStamp;
+                keypoints_v.keypoints[i].points.header.stamp = ros::Time::now();//pPCL->header.stamp;
                 continue;
             }
-            
-            x = p.x;
-            y = p.y;
-            z = p.z;
 
-            for (short int j=0; j<neighborhoodOffset.size(); j++){
-                if ((x_pix+neighborhoodFactor*neighborhoodOffset[j][1] >= 0 && x_pix+neighborhoodFactor*neighborhoodOffset[j][1] < IMG_PIXEL_WIDTH) && (y_pix+neighborhoodFactor*neighborhoodOffset[j][0] >= 0 && y_pix+neighborhoodFactor*neighborhoodOffset[j][0] < IMG_PIXEL_HEIGHT)){
-                    p = pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]);
-                    if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)){
-                        x += p.x;
-                        divisors++;
+            if (!std::isnan(x_pix) && !std::isnan(y_pix) && x_pix && y_pix){
 
-                        /* debugging pointcloud */
-                        if (pointcloudEnable){
-                            if (neighborhoodOffset[j][0] == 0 && neighborhoodOffset[j][1] == 0){
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).r = RED_KEYPOINT;
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).g = GREEN_KEYPOINT;
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).b = BLUE_KEYPOINT;
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).a = 255;
-                            }
-                            else{
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).r = RED;
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).g = GREEN;
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).b = BLUE;
-                                pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).a = 255;   
+                pcl::PointXYZRGBA p = pPCL->at(x_pix, y_pix);
+                double x0 = p.x;
+                int divisors = 0;
+
+                if (std::isnan(p.x) || std::isnan(p.y) || std::isnan(p.z) || !p.x || !p.y || !p.z){
+                    keypoints_v.keypoints[i].points.point.x = 0;
+                    keypoints_v.keypoints[i].points.point.y = 0;
+                    keypoints_v.keypoints[i].points.point.z = 0;
+                    keypoints_v.keypoints[i].points.header.stamp = ros::Time::now();//pPCL->header.stamp;
+                    continue;
+                }
+                
+                x = p.x;
+                y = p.y;
+                z = p.z;
+
+                for (short int j=0; j<neighborhoodOffset.size(); j++){
+                    if ((x_pix+neighborhoodFactor*neighborhoodOffset[j][1] >= 0 && x_pix+neighborhoodFactor*neighborhoodOffset[j][1] < IMG_PIXEL_WIDTH) && (y_pix+neighborhoodFactor*neighborhoodOffset[j][0] >= 0 && y_pix+neighborhoodFactor*neighborhoodOffset[j][0] < IMG_PIXEL_HEIGHT)){
+                        p = pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]);
+                        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)){
+                            x += p.x;
+                            divisors++;
+
+                            /* debugging pointcloud */
+                            if (pointcloudEnable){
+                                if (neighborhoodOffset[j][0] == 0 && neighborhoodOffset[j][1] == 0){
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).r = RED_KEYPOINT;
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).g = GREEN_KEYPOINT;
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).b = BLUE_KEYPOINT;
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).a = 255;
+                                }
+                                else{
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).r = RED;
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).g = GREEN;
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).b = BLUE;
+                                    pPCL->at(x_pix+neighborhoodFactor*neighborhoodOffset[j][1], y_pix+neighborhoodFactor*neighborhoodOffset[j][0]).a = 255;   
+                                }
                             }
                         }
                     }
                 }
-            }
-            if (divisors){
-                x /= (double) divisors;
-                /* for edge cases */
-                if (x > UPPER_VARIATION_THRESH * x0 || x < LOWER_VARIATION_THRESH * x0) 
-                    x = x0;
-            }
+                if (divisors){
+                    x /= (double) divisors;
+                    /* for edge cases */
+                    if (x > UPPER_VARIATION_THRESH * x0 || x < LOWER_VARIATION_THRESH * x0) 
+                        x = x0;
+                }
 
-            keypoints_v.keypoints[i].points.point.x = x;
-            keypoints_v.keypoints[i].points.point.y = y;
-            keypoints_v.keypoints[i].points.point.z = z;
-            keypoints_v.keypoints[i].points.header.stamp = timeStamp;
+                keypoints_v.keypoints[i].points.point.x = x;
+                keypoints_v.keypoints[i].points.point.y = y;
+                keypoints_v.keypoints[i].points.point.z = z;
+                keypoints_v.keypoints[i].points.header.stamp = ros::Time::now();//pPCL->header.stamp;
+            }
         }
-    }
-    
-    /* for profiling */
-    humanReceiverPub.publish(keypoints_v);
-    for (short int i=0; i<keypoints_v.keypoints.size(); i++){
-        keypoints_v.keypoints[i].points.point.x = 0;
-        keypoints_v.keypoints[i].points.point.y = 0;
-        keypoints_v.keypoints[i].points.point.z = 0;
-    }
+        
+        /* for profiling */
+        humanReceiverPub.publish(keypoints_v);
+        for (short int i=0; i<keypoints_v.keypoints.size(); i++){
+            keypoints_v.keypoints[i].points.point.x = 0;
+            keypoints_v.keypoints[i].points.point.y = 0;
+            keypoints_v.keypoints[i].points.point.z = 0;
+        }
 
-    /* publish debugging's pointcloud */
-    if (pointcloudEnable){
-        pointcloudDebugPub.publish(pPCL);
-    }
-    else{
-        ros::spinOnce();
+        /* publish debugging's pointcloud */
+        if (pointcloudEnable)
+            pointcloudDebugPub.publish(pPCL);
+
+        pclMsg = false;
     }
 }
 
@@ -174,13 +171,9 @@ int main (int argc, char** argv){
     Human3D obj(neighborhood_v, points_v, factor);
 
     // Subscribe to the output topic of the 2D openpose pipeline
-    message_filters::Subscriber<pcl::PointCloud<pcl::PointXYZRGBA> > subPointcloud(nh, pointcloud_topic, 1);
-    message_filters::Subscriber<openpose_ros_msgs::OpenPoseHumanList> subHumanList(nh, human_list_topic, 1);
-    message_filters::TimeSynchronizer<pcl::PointCloud<pcl::PointXYZRGBA>, openpose_ros_msgs::OpenPoseHumanList> sync(subPointcloud, subHumanList, 10);
-    sync.registerCallback(boost::bind(&Human3D::callback, _1, _2));
-
-    // ros::Subscriber subPointcloud = nh.subscribe(pointcloud_topic, queue_size, &Human3D::pointCloudTopicCallback, &obj);
-    // ros::Subscriber subHumanList = nh.subscribe(human_list_topic, queue_size, &Human3D::humanListCallback, &obj);
+    ros::Subscriber subPointcloud = nh.subscribe(pointcloud_topic, queue_size, &Human3D::pointCloudTopicCallback, &obj);
+    ros::Subscriber subHumanList = nh.subscribe(human_list_topic, queue_size, &Human3D::humanListCallback, &obj);
+    ros::Subscriber subPointcloud2 = nh.subscribe(pointcloud_topic, queue_size, check_pointcloud);
 
     ros::spin();
 
